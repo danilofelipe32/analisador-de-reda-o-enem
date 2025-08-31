@@ -1,0 +1,5 @@
+{
+  "name": "Analisador de Redação ENEM",
+  "description": "Avalie suas redações do ENEM enviando uma foto. Obtenha uma análise detalhada baseada nas 5 competências, com notas e feedback para melhoria, tudo com o poder da IA.",
+  "requestFramePermissions": []
+}
