@@ -1,49 +1,39 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import type { EvaluationResult } from '../types';
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove "data:mime/type;base64," prefix
-      resolve(result.split(',')[1]);
-    };
-    reader.onerror = (error) => reject(error);
-  });
+// The transcribeImage function is no longer supportable with the new API.
+// It will be removed from the application flow.
+export const transcribeImage = async (imageFile: File): Promise<string> => {
+    console.error("Image transcription is not supported by ApiFreeLLM.");
+    throw new Error("A funcionalidade de envio de imagem não é mais suportada. Por favor, digite ou cole sua redação diretamente.");
 };
 
-export const transcribeImage = async (imageFile: File): Promise<string> => {
-    if (!process.env.API_KEY) {
-        throw new Error("A chave da API da Gemini não foi configurada. Defina a variável de ambiente API_KEY.");
+
+const stringifySchemaForPrompt = () => {
+    // A simple string representation of the expected JSON structure.
+    return `
+    {
+        "overallScore": integer (0-1000),
+        "summary": string,
+        "competencies": [
+            {
+                "name": string ("Competência I", "Competência II", etc.),
+                "score": integer (0, 40, 80, 120, 160, or 200),
+                "feedback": string
+            }
+        ],
+        "improvementInsights": [string, string, ...],
+        "deviations": [
+            {
+                "competency": string ("I", "II", "III", "IV", "V"),
+                "type": string (e.g., "Erro de Ortografia", "Concordância Verbal"),
+                "originalExcerpt": string (the original text with the error),
+                "correction": string (the suggested correction),
+                "comment": string (explanation of the error)
+            }
+        ]
     }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-    try {
-        const base64Image = await fileToBase64(imageFile);
-
-        const imagePart = {
-            inlineData: {
-                mimeType: imageFile.type,
-                data: base64Image,
-            },
-        };
-        
-        const textPart = { text: "Transcreva o texto manuscrito contido nesta imagem. Retorne apenas o texto transcrito, sem qualquer formatação, cabeçalhos ou comentários adicionais." };
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, textPart] },
-        });
-
-        return response.text.trim();
-
-    } catch (error) {
-        console.error("Erro ao chamar a API Gemini para transcrição:", error);
-        throw new Error("Não foi possível ler o texto na imagem. Tente novamente com uma foto mais nítida e bem iluminada.");
-    }
-}
+    `;
+};
 
 
 const analysisPrompt = `
@@ -60,88 +50,65 @@ Siga estas etapas rigorosamente:
 3.  **Feedback Detalhado:** Para cada competência, forneça um parágrafo de feedback explicando a nota atribuída. Destaque os pontos fortes e as áreas que precisam de melhoria, oferecendo sugestões claras e práticas.
 4.  **Resumo Geral e Nota Final:** Calcule a nota final somando as notas das 5 competências. Escreva um parágrafo de resumo geral da avaliação, consolidando os principais pontos de feedback.
 5.  **Dicas de Melhoria:** Com base na análise, forneça uma lista curta (3 a 5 itens) de dicas acionáveis e específicas para o autor melhorar sua escrita em futuras redações.
-6.  **Formato de Saída:** Retorne a sua análise estritamente no formato JSON, conforme o schema definido. Não inclua markdown ou qualquer texto fora da estrutura JSON.
+6.  **Desvios Gramaticais:** Identifique desvios gramaticais ou de norma culta. Para cada desvio, indique a competência afetada, o tipo de erro, o trecho original, uma sugestão de correção e um breve comentário. Se não houver desvios, retorne uma lista vazia para "deviations".
+7.  **Formato de Saída:** Sua resposta DEVE ser um único objeto JSON válido, sem nenhuma formatação de markdown (como \`\`\`json). O JSON deve seguir estritamente a seguinte estrutura: ${stringifySchemaForPrompt()}
 `;
-
-const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        overallScore: {
-            type: Type.INTEGER,
-            description: "A nota final total, que é a soma das notas das 5 competências (0 a 1000)."
-        },
-        summary: {
-            type: Type.STRING,
-            description: "Um parágrafo de resumo geral da avaliação, destacando os pontos fortes e fracos principais."
-        },
-        competencies: {
-            type: Type.ARRAY,
-            description: "Uma lista contendo a avaliação detalhada de cada uma das 5 competências.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: {
-                        type: Type.STRING,
-                        description: "O nome da competência (ex: 'Competência I')."
-                    },
-                    score: {
-                        type: Type.INTEGER,
-                        description: "A nota para esta competência (0, 40, 80, 120, 160, ou 200)."
-                    },
-                    feedback: {
-                        type: Type.STRING,
-                        description: "O feedback detalhado e construtivo para esta competência."
-                    }
-                },
-                 required: ["name", "score", "feedback"]
-            }
-        },
-        improvementInsights: {
-            type: Type.ARRAY,
-            description: "Uma lista de 3 a 5 dicas acionáveis para o autor melhorar a redação.",
-            items: {
-                type: Type.STRING,
-            },
-        },
-    },
-    required: ["overallScore", "summary", "competencies", "improvementInsights"]
-};
 
 
 export const analyzeEssayText = async (essayText: string): Promise<EvaluationResult> => {
-    if (!process.env.API_KEY) {
-        throw new Error("A chave da API da Gemini não foi configurada. Defina a variável de ambiente API_KEY.");
-    }
     if (!essayText || essayText.trim().length < 50) {
-        throw new Error("O texto da redação é muito curto para ser analisado. Verifique a transcrição.");
+        throw new Error("O texto da redação é muito curto para ser analisado. Por favor, escreva mais.");
     }
     
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const API_URL = "https://apifreellm.com/api/chat";
+    const fullPrompt = `${analysisPrompt}\n\n---\n\n# REDAÇÃO PARA ANÁLISE:\n\n${essayText}`;
 
     try {
-        const fullContent = `${analysisPrompt}\n\n---\n\n# REDAÇÃO PARA ANÁLISE:\n\n${essayText}`;
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: fullContent,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: responseSchema,
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
+            body: JSON.stringify({ message: fullPrompt }),
         });
+        
+        const data = await response.json();
 
-        const jsonText = response.text.trim();
-        const parsedResult = JSON.parse(jsonText) as EvaluationResult;
+        if (data.status !== 'success') {
+            console.error("ApiFreeLLM Error:", data);
+            const errorMessage = data.error || "Ocorreu um erro desconhecido na API.";
+            if (data.status === 'rate_limited') {
+                throw new Error(`Limite de requisições atingido. Por favor, aguarde ${data.retry_after || 5} segundos e tente novamente.`);
+            }
+            throw new Error(`Erro da API: ${errorMessage}`);
+        }
+
+        const jsonText = data.response.trim();
+        // The API might wrap the JSON in markdown, so we need to clean it.
+        const cleanedJsonText = jsonText.replace(/^```json\s*|```$/g, '');
+        const parsedResult = JSON.parse(cleanedJsonText) as EvaluationResult;
         
         // Basic validation
-        if (!parsedResult.overallScore && parsedResult.overallScore !== 0 || !parsedResult.competencies || parsedResult.competencies.length !== 5 || !parsedResult.improvementInsights) {
-            throw new Error("A resposta da IA está em um formato inválido ou incompleto.");
+        if (!parsedResult.overallScore && parsedResult.overallScore !== 0 || !parsedResult.competencies || parsedResult.competencies.length !== 5) {
+            console.warn("Validation failed for parsed result", parsedResult);
+            throw new Error("A resposta da IA está em um formato inválido ou incompleto. A estrutura do JSON recebido não corresponde ao esperado.");
+        }
+
+        // Add `deviations` array if it's missing, as the prompt asks for it.
+        if (!parsedResult.deviations) {
+            parsedResult.deviations = [];
         }
         
         return parsedResult;
 
     } catch (error) {
-        console.error("Erro ao chamar a API Gemini para análise:", error);
-        throw new Error("Houve um problema com a IA durante a análise da redação. Tente novamente.");
+        console.error("Erro ao processar a análise com ApiFreeLLM:", error);
+        if (error instanceof SyntaxError) {
+             throw new Error("Não foi possível processar a resposta da IA. O formato do JSON retornado é inválido.");
+        }
+        if (error instanceof Error) {
+            throw error; // Re-throw known errors
+        }
+        throw new Error("Houve um problema ao se comunicar com o serviço de IA. Tente novamente.");
     }
 };

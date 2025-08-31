@@ -23,7 +23,8 @@ export interface EvaluationResult {
 export interface HistoryItem {
   id: string;
   name: string;
-  imageDataUrl: string;
+  essayText: string;
+  imageDataUrl?: string;
   evaluation: EvaluationResult;
   date: string;
 }

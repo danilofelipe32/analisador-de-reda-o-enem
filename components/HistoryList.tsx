@@ -1,6 +1,6 @@
 import React from 'react';
 import type { HistoryItem } from '../types';
-import { TrashIcon, ClockIcon, SearchIcon, XIcon } from './icons';
+import { TrashIcon, ClockIcon, SearchIcon, XIcon, FileTextIcon } from './icons';
 
 interface HistoryListProps {
   history: HistoryItem[];
@@ -55,7 +55,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
             <div
                 key={item.id}
                 onClick={() => onSelectItem(item)}
-                className="group cursor-pointer bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg hover:border-blue-400 transition-all duration-300 transform hover:-translate-y-1 relative"
+                className="group cursor-pointer bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg hover:border-blue-400 transition-all duration-300 transform hover:-translate-y-1 relative flex flex-col"
             >
                 <button
                     onClick={(e) => {
@@ -67,12 +67,8 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                 >
                     <XIcon className="w-4 h-4" />
                 </button>
-                <div className="aspect-[3/4] overflow-hidden">
-                    <img
-                        src={item.imageDataUrl}
-                        alt="Miniatura da redação"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
+                <div className="flex-grow flex flex-col items-center justify-center aspect-[4/3] bg-slate-50 p-4 border-b border-slate-100">
+                    <FileTextIcon className="w-16 h-16 text-slate-300" />
                 </div>
                 <div className="p-4 border-t border-slate-100">
                     <input

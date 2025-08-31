@@ -1,6 +1,6 @@
-import React from 'react';
-import type { EvaluationResult, CompetencyEvaluation } from '../types';
-import { CheckCircleIcon, LightbulbIcon, FileTextIcon, PrinterIcon } from './icons';
+import React, { useState } from 'react';
+import type { EvaluationResult, CompetencyEvaluation, Deviation } from '../types';
+import { CheckCircleIcon, LightbulbIcon, FileTextIcon, PrinterIcon, ChevronDownIcon, AlertTriangleIcon } from './icons';
 
 const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
   const percentage = (score / 1000) * 100;
@@ -64,14 +64,36 @@ const CompetencyBar: React.FC<{ competency: CompetencyEvaluation }> = ({ compete
   );
 };
 
+const DeviationCard: React.FC<{ deviation: Deviation }> = ({ deviation }) => {
+  return (
+    <div className="p-4 bg-red-50 rounded-lg border border-red-200 text-sm">
+      <div className="font-semibold text-red-800 mb-2">
+        <span className="font-bold">{deviation.type}</span> (Competência {deviation.competency})
+      </div>
+      <div className="space-y-2">
+        <div>
+          <span className="text-slate-500">Trecho Original: </span>
+          <span className="text-red-700 font-mono bg-red-100 px-1 rounded">"{deviation.originalExcerpt}"</span>
+        </div>
+        <div>
+          <span className="text-slate-500">Sugestão: </span>
+          <span className="text-green-700 font-mono bg-green-100 px-1 rounded">"{deviation.correction}"</span>
+        </div>
+        <p className="text-slate-600 pt-1">{deviation.comment}</p>
+      </div>
+    </div>
+  )
+}
+
 interface EvaluationDisplayProps {
     result: EvaluationResult;
-    imagePreviewUrl: string | null;
+    essayText: string;
     isHistoryView: boolean;
     onNewAnalysis: () => void;
 }
 
-export const EvaluationDisplay: React.FC<EvaluationDisplayProps> = ({ result, imagePreviewUrl, isHistoryView, onNewAnalysis }) => {
+export const EvaluationDisplay: React.FC<EvaluationDisplayProps> = ({ result, essayText, isHistoryView, onNewAnalysis }) => {
+    const [isTextVisible, setIsTextVisible] = useState(false);
     
     const handleExportTxt = () => {
         let content = `ANÁLISE DE REDAÇÃO ENEM\n`;
@@ -89,7 +111,20 @@ export const EvaluationDisplay: React.FC<EvaluationDisplayProps> = ({ result, im
             result.improvementInsights.forEach(tip => {
                 content += `- ${tip}\n`;
             });
+            content += '\n';
         }
+        
+        if (result.deviations && result.deviations.length > 0) {
+            content += `--- DESVIOS E CORREÇÕES ---\n`;
+            result.deviations.forEach(d => {
+                content += `Tipo: ${d.type} (Competência ${d.competency})\n`;
+                content += `Trecho: "${d.originalExcerpt}"\n`;
+                content += `Correção: "${d.correction}"\n`;
+                content += `Comentário: ${d.comment}\n\n`;
+            });
+        }
+        
+        content += `--- TEXTO ORIGINAL ANALISADO ---\n${essayText}`;
 
         const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -125,12 +160,21 @@ export const EvaluationDisplay: React.FC<EvaluationDisplayProps> = ({ result, im
         </div>
       </div>
       
-       {imagePreviewUrl && (
-          <div className="mb-8 text-center break-inside-avoid">
-             <h3 className="text-xl font-semibold text-slate-700 mb-4">Redação Analisada</h3>
-             <img src={imagePreviewUrl} alt="Redação analisada" className="max-w-full md:max-w-md max-h-[70vh] rounded-lg shadow-md border border-slate-200 mx-auto" />
-          </div>
-        )}
+       <div className="mb-8 p-4 bg-white rounded-xl border border-slate-200 break-inside-avoid">
+            <button 
+                onClick={() => setIsTextVisible(!isTextVisible)}
+                className="w-full flex justify-between items-center text-left font-semibold text-slate-700"
+                aria-expanded={isTextVisible}
+            >
+                <span>Visualizar Texto Analisado</span>
+                <ChevronDownIcon className={`w-5 h-5 transition-transform ${isTextVisible ? 'rotate-180' : ''}`} />
+            </button>
+            {isTextVisible && (
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                    <p className="text-slate-600 whitespace-pre-wrap leading-relaxed">{essayText}</p>
+                </div>
+            )}
+        </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 break-inside-avoid">
         <div className="md:col-span-1 flex flex-col items-center justify-center p-6 bg-white rounded-xl border border-slate-200">
@@ -154,6 +198,20 @@ export const EvaluationDisplay: React.FC<EvaluationDisplayProps> = ({ result, im
           ))}
         </div>
       </div>
+
+      {result.deviations && result.deviations.length > 0 && (
+        <div className="mb-8 break-inside-avoid">
+            <h3 className="text-2xl font-bold text-slate-800 mb-4 text-center md:text-left flex items-center justify-center md:justify-start">
+                <AlertTriangleIcon className="h-6 w-6 text-red-500 mr-2" />
+                Desvios e Correções
+            </h3>
+            <div className="space-y-4">
+                {result.deviations.map((dev, index) => (
+                    <DeviationCard key={index} deviation={dev} />
+                ))}
+            </div>
+        </div>
+      )}
       
       {result.improvementInsights && result.improvementInsights.length > 0 && (
         <div className="p-6 bg-yellow-50 rounded-xl border border-yellow-200 break-inside-avoid">

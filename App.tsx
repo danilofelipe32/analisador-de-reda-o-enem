@@ -1,23 +1,27 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { transcribeImage, analyzeEssayText } from './services/geminiService';
+import { analyzeEssayText } from './services/geminiService';
 import type { EvaluationResult, HistoryItem } from './types';
 import { Header } from './components/Header';
-import { ImageUploader } from './components/ImageUploader';
 import { EvaluationDisplay } from './components/EvaluationDisplay';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { Footer } from './components/Footer';
-import { SampleImage } from './components/SampleImage';
 import { HistoryList } from './components/HistoryList';
-import { TextEditor } from './components/TextEditor';
+import { BookOpenIcon } from './components/icons';
 
 const MAX_HISTORY_ITEMS = 20;
 
+const SAMPLE_ESSAY = `A persistência da violência contra a mulher na sociedade brasileira é um problema grave e complexo que exige um debate sério e contínuo. Arraigada em uma cultura patriarcal, essa forma de agressão se manifesta de diversas maneiras, desde o assédio verbal até o feminicídio, deixando marcas profundas nas vítimas e em toda a sociedade. É fundamental, portanto, analisar as causas dessa violência e propor caminhos para sua erradicação.
+
+Primeiramente, é preciso reconhecer que a desigualdade de gênero é a principal causa da violência contra a mulher. A ideia de que homens são superiores e detêm o poder sobre as mulheres legitima atitudes de controle e agressão. Essa mentalidade é reforçada por piadas machistas, pela objetificação do corpo feminino na mídia e pela falta de representatividade feminina em espaços de poder. Enquanto essa estrutura de pensamento não for desconstruída, a violência continuará a encontrar terreno fértil para prosperar.
+
+Além disso, a ineficácia de políticas públicas e a morosidade do sistema judiciário contribuem para a perpetuação do problema. Embora a Lei Maria da Penha represente um avanço significativo, sua aplicação ainda enfrenta obstáculos, como a falta de delegacias especializadas e de preparo dos agentes para acolher as vítimas de forma humanizada. A impunidade dos agressores envia uma mensagem perigosa de que a violência é tolerável, desestimulando as denúncias e aumentando a vulnerabilidade das mulheres.
+
+Diante do exposto, é urgente que o Estado e a sociedade civil atuem em conjunto para combater a violência contra a mulher. O Governo Federal deve investir na ampliação e no fortalecimento da rede de proteção, com mais Delegacias da Mulher, casas-abrigo e centros de referência, além de promover campanhas de conscientização que desmistifiquem a cultura do machismo. A sociedade, por sua vez, tem o papel de educar as novas gerações para o respeito e a igualdade de gênero, começando dentro de casa e nas escolas. Somente com ações integradas e um compromisso coletivo será possível construir uma sociedade onde as mulheres possam viver livres do medo e da violência.`;
+
+
 export default function App() {
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [transcribedText, setTranscribedText] = useState<string>('');
-  const [isEditingText, setIsEditingText] = useState<boolean>(false);
+  const [essayText, setEssayText] = useState<string>('');
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -39,43 +43,18 @@ export default function App() {
   }, []);
   
   const handleStartOver = useCallback(() => {
-    setImageFile(null);
-    setImageUrl(null);
     setEvaluation(null);
     setError(null);
     setIsLoading(false);
     setIsViewingHistory(false);
     setSearchQuery('');
-    setTranscribedText('');
-    setIsEditingText(false);
+    setEssayText('');
     setLoadingMessage('');
   }, []);
 
-  const handleImageChange = async (file: File) => {
-    handleStartOver();
-    setImageFile(file);
-    setImageUrl(URL.createObjectURL(file));
-
-    setIsLoading(true);
-    setLoadingMessage('Transcrevendo o texto da imagem...');
-    setError(null);
-
-    try {
-      const text = await transcribeImage(file);
-      setTranscribedText(text);
-      setIsEditingText(true);
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Ocorreu um erro desconhecido durante a transcrição.");
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
-  };
-
-  const handleAnalyze = async (essayText: string) => {
-    if (!imageFile) {
-      setError("Ocorreu um erro, a imagem original foi perdida. Por favor, comece novamente.");
+  const handleAnalyze = async () => {
+    if (essayText.trim().split(' ').length < 30) {
+      setError('O texto da redação parece muito curto. Por favor, verifique se o texto está completo antes de analisar.');
       return;
     }
 
@@ -83,66 +62,51 @@ export default function App() {
     setLoadingMessage('Analisando sua redação...');
     setError(null);
     setEvaluation(null);
-    setIsEditingText(false);
     setIsViewingHistory(false);
 
     try {
       const result = await analyzeEssayText(essayText);
       setEvaluation(result);
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const imageDataUrl = reader.result as string;
-        const newHistoryItem: HistoryItem = {
-          id: new Date().toISOString() + Math.random(),
-          name: `Redação - ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`,
-          imageDataUrl: imageDataUrl,
-          evaluation: result,
-          date: new Date().toISOString(),
-        };
-
-        setHistory(prevHistory => {
-          const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, MAX_HISTORY_ITEMS);
-          try {
-            localStorage.setItem('essayHistory', JSON.stringify(updatedHistory));
-          } catch (e) {
-            console.error("Failed to save history to localStorage", e);
-            setError("Não foi possível salvar no histórico. O armazenamento pode estar cheio.");
-          }
-          return updatedHistory;
-        });
+      const newHistoryItem: HistoryItem = {
+        id: new Date().toISOString() + Math.random(),
+        name: `Redação - ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`,
+        essayText: essayText,
+        evaluation: result,
+        date: new Date().toISOString(),
       };
-      reader.readAsDataURL(imageFile);
+
+      setHistory(prevHistory => {
+        const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, MAX_HISTORY_ITEMS);
+        try {
+          localStorage.setItem('essayHistory', JSON.stringify(updatedHistory));
+        } catch (e) {
+          console.error("Failed to save history to localStorage", e);
+          setError("Não foi possível salvar no histórico. O armazenamento pode estar cheio.");
+        }
+        return updatedHistory;
+      });
 
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Ocorreu um erro desconhecido durante a análise.");
-      setIsEditingText(true); // Go back to editor on error
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
   };
   
-  const handleUseSample = async () => {
-    try {
-        const response = await fetch('https://picsum.photos/id/17/800/1200'); // An image with text
-        const blob = await response.blob();
-        const file = new File([blob], "redacao-exemplo.jpg", { type: "image/jpeg" });
-        await handleImageChange(file);
-    } catch (err) {
-        console.error("Failed to fetch sample image:", err);
-        setError("Não foi possível carregar a imagem de exemplo. Verifique sua conexão com a internet.");
-    }
+  const handleUseSample = () => {
+    handleStartOver();
+    setEssayText(SAMPLE_ESSAY);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSelectHistoryItem = (item: HistoryItem) => {
-    setImageFile(null);
-    setImageUrl(item.imageDataUrl);
+    setEssayText(item.essayText);
     setEvaluation(item.evaluation);
     setError(null);
     setIsLoading(false);
-    setIsEditingText(false);
     setIsViewingHistory(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -192,6 +156,7 @@ export default function App() {
 
     const evalData = item.evaluation;
     const nameMatch = item.name.toLowerCase().includes(query);
+    const textMatch = item.essayText.toLowerCase().includes(query);
     const scoreMatch = evalData.overallScore.toString().includes(query);
     const summaryMatch = evalData.summary.toLowerCase().includes(query);
     const competenciesMatch = evalData.competencies.some(c =>
@@ -206,7 +171,7 @@ export default function App() {
         d.correction.toLowerCase().includes(query)
     ) || false;
 
-    return nameMatch || scoreMatch || summaryMatch || competenciesMatch || insightsMatch || deviationsMatch;
+    return nameMatch || textMatch || scoreMatch || summaryMatch || competenciesMatch || insightsMatch || deviationsMatch;
   });
 
   const renderContent = () => {
@@ -214,30 +179,42 @@ export default function App() {
       return <LoadingSpinner message={loadingMessage} />;
     }
     if (evaluation) {
-      return <EvaluationDisplay result={evaluation} imagePreviewUrl={imageUrl} isHistoryView={isViewingHistory} onNewAnalysis={handleStartOver} />;
+      return <EvaluationDisplay result={evaluation} essayText={essayText} isHistoryView={isViewingHistory} onNewAnalysis={handleStartOver} />;
     }
-    if (isEditingText) {
-      return (
-        <>
-          {error && <ErrorDisplay message={error} />}
-          <TextEditor 
-            imageUrl={imageUrl!}
-            initialText={transcribedText}
-            onAnalyze={handleAnalyze}
-            onCancel={handleStartOver}
-            isAnalyzing={isLoading}
-          />
-        </>
-      );
-    }
-    // Default idle state
+    // Default idle state: Essay Input
     return (
-      <div className="no-print">
-        <div className="text-center">
-          {error && <ErrorDisplay message={error} />}
-          <ImageUploader onImageSelect={handleImageChange} />
-          <p className="text-slate-500 my-4">ou</p>
-          <SampleImage onUseSample={handleUseSample} />
+      <div className="w-full animate-fade-in no-print">
+        <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-slate-800">Insira sua Redação</h2>
+            <p className="text-slate-600 mt-2 max-w-2xl mx-auto">
+              Digite ou cole o texto da sua redação no campo abaixo para receber uma análise detalhada.
+            </p>
+        </div>
+        {error && <ErrorDisplay message={error} />}
+        <textarea
+            value={essayText}
+            onChange={(e) => setEssayText(e.target.value)}
+            className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow resize-y shadow-sm min-h-[300px]"
+            rows={15}
+            aria-label="Editor de texto da redação"
+            disabled={isLoading}
+            placeholder="Comece a digitar sua redação aqui..."
+        />
+        <div className="mt-6 flex flex-wrap gap-4 justify-between items-center">
+            <button
+                onClick={handleUseSample}
+                className="group flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+            >
+                <BookOpenIcon className="h-5 w-5 mr-2 text-blue-500 group-hover:text-blue-600" />
+                Usar redação de exemplo
+            </button>
+            <button
+              onClick={handleAnalyze}
+              disabled={isLoading || essayText.trim().length < 50}
+              className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-slate-400 disabled:cursor-not-allowed disabled:scale-100"
+            >
+              {isLoading ? 'Analisando...' : 'Analisar Redação'}
+            </button>
         </div>
       </div>
     );
